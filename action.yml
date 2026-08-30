@@ -1,0 +1,58 @@
+name: 'KiriBuild'
+description: 'Checkout, setup Node, install Kirigami CLI (local or global), and export'
+author: 'Maxime Larrivée-Roy'
+
+branding:
+  icon: 'package'
+  color: 'purple'
+
+inputs:
+  node-version:
+    description: 'Node.js version to use'
+    required: false
+    default: '24'
+  kirigami-version:
+    description: 'Version of @kirigami/kirigami to install globally (fallback)'
+    required: false
+    default: 'latest'
+  lfs:
+    description: 'Whether to checkout with Git LFS'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v7
+      with:
+        lfs: ${{ inputs.lfs }}
+
+    - name: Setup Node
+      uses: actions/setup-node@v7
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: 'npm'
+
+    - name: Install project dependencies (if present)
+      if: ${{ hashFiles('package.json') != '' }}
+      run: npm install
+      shell: bash
+
+    - name: Install Kirigami CLI (global fallback)
+      run: npm install -g @kirigami/kirigami@${{ inputs.kirigami-version }}
+      shell: bash
+
+    - name: Ensure global npm bin is on PATH
+      run: echo "$(npm config get prefix)/bin" >> "$GITHUB_PATH"
+      shell: bash
+
+    - name: Build and Export
+      run: |
+        if [ -f "./node_modules/.bin/kiri" ]; then
+          KIRI_BIN="./node_modules/.bin/kiri"
+        else
+          KIRI_BIN="$(which kiri)"
+        fi
+        node --experimental-wasm-jspi "$KIRI_BIN" export
+      shell: bash
