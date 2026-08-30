@@ -1,5 +1,5 @@
 name: 'KiriBuild'
-description: 'Checkout, setup Node, install Kirigami CLI (local or global), and export'
+description: 'Checkout, setup Node, install Kirigami CLI (local or global), export, and commit changes'
 author: 'Maxime Larrivée-Roy'
 
 branding:
@@ -19,6 +19,10 @@ inputs:
     description: 'Whether to checkout with Git LFS'
     required: false
     default: 'false'
+  commit-message:
+    description: 'Commit message to use when exported files have changed'
+    required: false
+    default: 'chore: update exported files [skip ci]'
 
 runs:
   using: 'composite'
@@ -39,11 +43,34 @@ runs:
       run: npm install
       shell: bash
 
-    - name: Install Kirigami CLI
+    - name: Install Kirigami CLI (global fallback)
       if: ${{ hashFiles('node_modules/.bin/kiri') == '' }}
-      run: npm install @kirigami/kirigami@${{ inputs.kirigami-version }}
+      run: npm install -g @kirigami/kirigami@${{ inputs.kirigami-version }}
+      shell: bash
+
+    - name: Ensure global npm bin is on PATH
+      run: echo "$(npm config get prefix)/bin" >> "$GITHUB_PATH"
       shell: bash
 
     - name: Build and Export
-      run: node --experimental-wasm-jspi ./node_modules/.bin/kiri export
+      run: |
+        if [ -f "./node_modules/.bin/kiri" ]; then
+          KIRI_BIN="./node_modules/.bin/kiri"
+        else
+          KIRI_BIN="$(which kiri)"
+        fi
+        node --experimental-wasm-jspi "$KIRI_BIN" export
+      shell: bash
+
+    - name: Commit changes (if any)
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "${{ inputs.commit-message }}"
+          git push
+        else
+          echo "No changes to commit."
+        fi
       shell: bash

@@ -6,14 +6,14 @@ git commit -m "Add local/global kiri fallback"
 git push origin main
 
 # 2. Tu crées un tag précis pour cette version
-git tag -a v1.1.0 -m "Add local/global kiri binary fallback"
-git push origin v1.1.0
+git tag -a v1.0.3 -m "Setup cleaning"
+git push origin v1.0.3
 
 # 3. Tu déplaces le tag flottant majeur pour qu'il pointe dessus
-git tag -f v1 v1.1.0
+git tag -f v1 v1.0.3
 git push origin v1 --force
 
-Le -f (force) sur l'étape 3 est normal et attendu — c'est le seul tag que tu es censé déplacer. Les tags précis (v1.1.0), eux, ne bougent jamais une fois publiés.
+Le -f (force) sur l'étape 3 est normal et attendu — c'est le seul tag que tu es censé déplacer. Les tags précis (v1.0.3), eux, ne bougent jamais une fois publiés.
 
 Pour ta toute première release
 
