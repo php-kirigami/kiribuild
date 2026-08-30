@@ -34,30 +34,16 @@ runs:
         node-version: ${{ inputs.node-version }}
         cache: 'npm'
 
-    - name: Install project dependencies (if present)
+    - name: Install project dependencies
       if: ${{ hashFiles('package.json') != '' }}
       run: npm install
       shell: bash
 
-    - name: Install Kirigami CLI (global fallback)
-      run: npm install -g @kirigami/kirigami@${{ inputs.kirigami-version }}
-      shell: bash
-
-    - name: Ensure global npm bin is on PATH
-      run: echo "$(npm config get prefix)/bin" >> "$GITHUB_PATH"
-      shell: bash
-
-    - name: Install project dependencies (if present)
-      if: ${{ hashFiles('package.json') != '' }}
-      run: npm install
+    - name: Install Kirigami CLI
+      if: ${{ hashFiles('node_modules/.bin/kiri') == '' }}
+      run: npm install @kirigami/kirigami@${{ inputs.kirigami-version }}
       shell: bash
 
     - name: Build and Export
-      run: |
-        if [ -f "./node_modules/.bin/kiri" ]; then
-          KIRI_BIN="./node_modules/.bin/kiri"
-        else
-          KIRI_BIN="$(which kiri)"
-        fi
-        node --experimental-wasm-jspi "$KIRI_BIN" export
+      run: node --experimental-wasm-jspi ./node_modules/.bin/kiri export
       shell: bash

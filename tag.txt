@@ -1,0 +1,31 @@
+Le workflow concret, à chaque changement
+bash
+# 1. Tu commit tes changements normalement
+git add .
+git commit -m "Add local/global kiri fallback"
+git push origin main
+
+# 2. Tu crées un tag précis pour cette version
+git tag -a v1.1.0 -m "Add local/global kiri binary fallback"
+git push origin v1.1.0
+
+# 3. Tu déplaces le tag flottant majeur pour qu'il pointe dessus
+git tag -f v1 v1.1.0
+git push origin v1 --force
+
+Le -f (force) sur l'étape 3 est normal et attendu — c'est le seul tag que tu es censé déplacer. Les tags précis (v1.1.0), eux, ne bougent jamais une fois publiés.
+
+Pour ta toute première release
+
+Comme c'est ton premier commit officiel avec ce action.yml final :
+
+bash
+git add .
+git commit -m "Initial release: checkout, setup node, kiri fallback, export"
+git push origin main
+
+git tag -a v1.0.0 -m "Initial release"
+git push origin v1.0.0
+
+git tag v1 v1.0.0
+git push origin v1
