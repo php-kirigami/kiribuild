@@ -47,6 +47,11 @@ runs:
       run: echo "$(npm config get prefix)/bin" >> "$GITHUB_PATH"
       shell: bash
 
+    - name: Install project dependencies (if present)
+      if: ${{ hashFiles('package.json') != '' }}
+      run: npm install
+      shell: bash
+
     - name: Build and Export
       run: |
         if [ -f "./node_modules/.bin/kiri" ]; then
