@@ -6,7 +6,7 @@ git commit -m "Add local/global kiri fallback"
 git push origin main
 
 # 2. Tu crées un tag précis pour cette version
-git tag -a v1.0.3 -m "Setup cleaning"
+git tag -a v1.0.3 -m "Add commit abilities"
 git push origin v1.0.3
 
 # 3. Tu déplaces le tag flottant majeur pour qu'il pointe dessus
