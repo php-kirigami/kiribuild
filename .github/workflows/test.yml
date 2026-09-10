@@ -5,13 +5,13 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Newest @kirigami/kirigami that actually installs + exports. `latest` keeps
-# breaking (1.3.0 shipped an invalid schema; 1.3.2 depends on an unpublished
-# @kirigami/php-prepros), so the gating jobs pin this and the `latest-canary`
-# scenario tracks `latest` non-blockingly. Bump this one line when the canary
-# goes green.
+# Newest @kirigami/kirigami known to install + export cleanly. `latest` has a
+# history of shipping broken (1.2.0 bin, 1.3.0 schema, 1.3.2 briefly missing a
+# published dep), so the gating jobs pin this while the non-blocking
+# `latest-canary` scenario tracks `latest`. When the canary is green and stays
+# green, bump this line (or drop the pinning entirely).
 env:
-  KIRI_GOOD: "1.3.1"
+  KIRI_GOOD: "1.3.2"
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -162,16 +162,10 @@ jobs:
   # Real-world test: run the action against the official Kirigami templates,
   # which pull in the parts the fixture can't (@kirigami/canva + Sass, esbuild,
   # the highlight plugin). The staged package.json is pinned to KIRI_GOOD.
-  #
-  # template-default is required. template-demo is continue-on-error: as of
-  # @kirigami/kirigami 1.3.1 its export dies with "retobj.files.map is not a
-  # function" — an upstream bug, not the action. Drop continue-on-error when a
-  # fixed kiri ships and this job is green.
   # ---------------------------------------------------------------------------
   templates:
     name: templates (${{ matrix.template }})
     runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.template == 'template-demo' }}
     strategy:
       fail-fast: false
       matrix:

@@ -111,10 +111,11 @@ The `-f` / `--force` is expected — but only ever on the floating major tag.
 `.github/workflows/test.yml` has two jobs, both on every push / PR:
 
 The workflow has a top-level `env: KIRI_GOOD` — the newest `@kirigami/kirigami`
-that actually installs + exports. `latest` keeps breaking, so the gating jobs
-pin `KIRI_GOOD` (the fixture and templates ship `latest` in their package.json;
-the workflow rewrites it before the action runs). Bump that one line when the
-`latest-canary` scenario goes green.
+known to install + export cleanly (currently `1.3.2`). `latest` has a history of
+shipping broken, so the gating jobs pin `KIRI_GOOD` (the fixture and templates
+ship `latest` in their package.json; the workflow rewrites it before the action
+runs). Bump that one line once `latest-canary` has been green for a while — or
+drop the pinning if upstream releases stabilise.
 
 - **`cli-resolution`** — a matrix over `test/fixtures/site`, a tiny project
   depending only on `@kirigami/kirigami`. Scenarios: `local-cli`, `global-cli`,
@@ -128,18 +129,17 @@ the workflow rewrites it before the action runs). Bump that one line when the
   data file, `<markdown>`, a custom `<uppercase>` tag, a `post_render` hook, the
   image autogenerator (`dist/images/*.webp`), sitemap.
 - **`templates`** — a matrix over the official templates (pinned to `KIRI_GOOD`),
-  staged at the workspace root and run through the action. `template-default` is
-  **required** (asserts pages + `@kirigami/canva` Sass output + esbuild output +
-  sitemap). `template-demo` is **`continue-on-error`**: as of `@kirigami/kirigami`
-  1.3.1 its export dies with `retobj.files.map is not a function` (upstream bug).
-  Drop `continue-on-error` when a fixed kiri ships and the job is green.
+  staged at the workspace root and run through the action. Both `template-default`
+  (pages + `@kirigami/canva` Sass output + esbuild output + sitemap) and
+  `template-demo` (all `features/*` pages, image autogenerator, `<swatches>` tag,
+  highlight plugin, YAML/JSON data loops) are **required**.
 
-Published-version history worth knowing (all block `kiri export` / install):
-`@kirigami/kirigami` **1.2.0** (broken bin), **1.3.0** (invalid bundled
-`kirigami.schema.json`), **1.3.2** (depends on unpublished
-`@kirigami/php-prepros@1.6.1`). **1.3.1** works for the fixture +
-`template-default` (not `template-demo`). `1.1.3` was the last good release
-before the streak.
+Published-version history worth knowing: `@kirigami/kirigami` **1.2.0** (broken
+bin), **1.3.0** (invalid bundled `kirigami.schema.json`), and briefly **1.3.2**
+(dep `@kirigami/php-prepros@1.6.1` lagged the CDN) each blocked every
+`kiri export` / install. **1.3.1** worked for the fixture + `template-default`
+but not `template-demo` (`retobj.files.map` render bug); **1.3.2** fixed that and
+is the current `KIRI_GOOD`. `1.1.3` was the last good release before the streak.
 
 Run locally with `act` (Docker-based): `act push -j cli-resolution`,
 `act push -j templates`. `.actrc` is currently empty.
@@ -172,12 +172,9 @@ Run locally with `act` (Docker-based): `act push -j cli-resolution`,
 - `actions/checkout@v7` / `actions/setup-node@v7` are pinned ahead of what's
   released — verify these resolve on GitHub before relying on them.
 - No caching of the global `@kirigami/kirigami` install on the fallback path.
-- **`@kirigami/kirigami@latest` on npm is chronically broken** — the tests pin
-  `env: KIRI_GOOD` (currently `1.3.1`) and a `latest-canary` scenario flags when
-  a good release lands. Bump `KIRI_GOOD` then.
-- **`template-demo` export is broken on `@kirigami/kirigami` 1.3.1**
-  (`retobj.files.map is not a function`) — the `templates` job keeps it as
-  `continue-on-error`. Remove that once a fixed kiri ships and the job is green.
+- **`@kirigami/kirigami@latest` has been flaky** — the tests pin `env: KIRI_GOOD`
+  (currently `1.3.2`) and a `latest-canary` scenario flags regressions. Bump
+  `KIRI_GOOD` (or drop the pin) once `latest` has been reliably green.
 - `cli-resolution`'s `pinned-version` scenario hardcodes `1.1.2`; bump it if that
   version is ever unpublished.
 
