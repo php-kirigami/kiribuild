@@ -111,20 +111,25 @@ The `-f` / `--force` is expected — but only ever on the floating major tag.
 `.github/workflows/test.yml` has two jobs:
 
 - **`cli-resolution`** (runs on every push / PR) — a matrix over
-  `test/fixtures/site`, a tiny project that depends only on `@kirigami/kirigami`.
+  `test/fixtures/site`, a tiny project depending only on `@kirigami/kirigami`.
   Scenarios: `local-cli`, `global-cli`, `preinstalled` (asserts `npm install` is
   skipped, via a sentinel file in `node_modules/`), `has-node-24` (pins Node
   `24.0.0` first, asserts the action's setup-node is skipped by checking
   `node -v` is still `v24.0.0`), `pinned-version` (installs `kirigami-version:
-  1.1.2` — an old published CLI — and asserts that exact version lands and still
-  exports). Every non-pinned scenario also asserts the core feature surface:
+  1.1.2` and asserts that exact version lands and still exports), `latest-canary`
+  (`continue-on-error`, non-blocking — runs `latest` so a green tick means it's
+  time to un-pin). Every full scenario also asserts the core feature surface:
   layouts, `@stats` data file, `<markdown>`, a custom `<uppercase>` tag, a
   `post_render` hook, the image autogenerator (`dist/images/*.webp`), sitemap.
+  **The CLI is pinned to `1.1.3`** — 1.2.0 and 1.3.0 are broken on npm (1.3.0
+  ships an invalid bundled `kirigami.schema.json` that ajv rejects at load;
+  1.2.0 has a broken bin). Bump the pins in `test.yml` + `test/fixtures/site/package.json`
+  once `latest-canary` is green.
 - **`features`** (`workflow_dispatch` only) — checks out `php-kirigami/template-demo`
   and asserts the *full* feature set incl. `@kirigami/canva`,
-  `@kirigami/plugin-highlight`, Sass and esbuild. Manual-only because those
-  packages aren't on npm yet, so a clean `npm install` of the demo fails. Flip
-  the `if:` to `push` once the ecosystem is published.
+  `@kirigami/plugin-highlight`, Sass and esbuild. Manual-only: `@kirigami/plugin-highlight`
+  still isn't on npm (404), so a clean `npm install` of the demo fails. Flip the
+  `if:` to `push` once it's published.
 
 Run locally with `act` (Docker-based): `act push -j cli-resolution`,
 `act workflow_dispatch -j features`. `.actrc` is currently empty.
@@ -157,13 +162,14 @@ Run locally with `act` (Docker-based): `act push -j cli-resolution`,
 - `actions/checkout@v7` / `actions/setup-node@v7` are pinned ahead of what's
   released — verify these resolve on GitHub before relying on them.
 - No caching of the global `@kirigami/kirigami` install on the fallback path.
+- **`@kirigami/kirigami@1.2.0` and `@1.3.0` on npm are broken** (see the
+  `cli-resolution` note above). Tests pin `1.1.3`; the `latest-canary` scenario
+  flags when a fixed release lands. Un-pin then: `test.yml` (three spots) +
+  `test/fixtures/site/package.json`.
 - `cli-resolution`'s `pinned-version` scenario hardcodes `1.1.2`; bump it if that
   version is ever unpublished.
-- `features` job is `workflow_dispatch`-only until `@kirigami/canva@^2` and
-  `@kirigami/plugin-highlight` are published to npm — then switch its `if:` to
-  `push` and drop this note.
-- The published `@kirigami/kirigami` (1.1.3) lags the monorepo (1.3.0); the
-  fixture uses `latest`, so the tests exercise whatever npm currently serves.
+- `features` job is `workflow_dispatch`-only until `@kirigami/plugin-highlight`
+  is published to npm — then switch its `if:` to `push` and drop this note.
 
 ---
 
