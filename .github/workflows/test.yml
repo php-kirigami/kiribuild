@@ -7,86 +7,15 @@ on:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Real-world test: run the action against php-kirigami/template-demo, the
-  # project that exercises the whole Kirigami feature set including the parts
-  # that need extra packages (@kirigami/canva, @kirigami/plugin-highlight,
-  # Sass, esbuild).
-  #
-  # Manual-only for now: template-demo pins @kirigami/canva ^2 and
-  # @kirigami/plugin-highlight, which aren't on npm yet, so a clean `npm
-  # install` fails. Flip this to `push` once the ecosystem is published.
-  # ---------------------------------------------------------------------------
-  features:
-    name: features (template-demo)
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out the action
-        uses: actions/checkout@v7
-        with:
-          path: .action
-
-      - name: Check out the Kirigami demo project
-        uses: actions/checkout@v7
-        with:
-          repository: php-kirigami/template-demo
-          path: .demo
-
-      - name: Stage the demo project at the workspace root
-        shell: bash
-        run: rsync -a --exclude .git .demo/ ./
-
-      - name: Run KiriBuild
-        uses: ./.action
-
-      - name: Assert every Kirigami feature produced output
-        shell: bash
-        run: |
-          fail() { echo "::error::$1"; exit 1; }
-
-          [ -f dist/index.html ]                              || fail "home page not exported"
-          [ -f dist/features/markdown/index.html ]            || fail "markdown page not exported"
-          [ -f dist/features/data/index.html ]                || fail "data-files page not exported"
-          [ -f dist/features/images/index.html ]              || fail "images page not exported"
-          [ -f dist/features/code/index.html ]                || fail "code page not exported"
-          [ -f dist/features/tags/index.html ]                || fail "tags & hooks page not exported"
-
-          [ -f dist/sitemap.xml ]                             || fail "sitemap.xml not generated"
-          ls dist/styles/*.css >/dev/null 2>&1                || fail "Sass task produced no CSS"
-          ls dist/scripts/*.js >/dev/null 2>&1                || fail "esbuild task produced no JS"
-
-          ls dist/images/*.webp >/dev/null 2>&1               || fail "image autogenerator produced no images"
-          grep -q 'srcset' dist/features/images/index.html    || fail "responsive <img asset> not rendered"
-          grep -q 'class="swatches"' dist/features/images/index.html \
-                                                              || fail "custom <swatches> tag not rendered"
-          grep -q 'hljs' dist/features/code/index.html        || fail "highlight plugin did not bake in styles"
-          grep -q 'stat__num' dist/features/data/index.html   || fail "JSON data file was not looped over"
-          grep -q 'article__meta' dist/features/data/index.html \
-                                                              || fail "YAML data file was not looped over"
-
-          if find dist -name '_*' | grep -q .; then
-            find dist -name '_*'; fail "partial source files leaked into dist/"
-          fi
-
-          echo "Exported $(find dist -type f | wc -l) files."
-
-  # ---------------------------------------------------------------------------
   # Plumbing + core-feature test: a tiny fixture (test/fixtures/site) that
   # depends only on @kirigami/kirigami, run through every CLI-resolution branch
-  # of the action. Each run also asserts the core Kirigami feature surface:
+  # of the action. Each full run also asserts the core Kirigami feature surface:
   # PHP layouts, a data file, a Markdown block, a custom tag + render hook and
   # the image autogenerator.
-  #
-  # The CLI is pinned to 1.1.3 — the newest published @kirigami/kirigami that
-  # actually runs `kiri export` (1.2.0 and 1.3.0 are broken on npm: 1.3.0 ships
-  # an invalid bundled schema, 1.2.0 a broken bin). The `latest-canary` scenario
-  # tracks `latest` non-blockingly; when it goes green, bump the pins and drop
-  # this note.
   # ---------------------------------------------------------------------------
   cli-resolution:
     name: ${{ matrix.scenario }}
     runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.scenario == 'latest-canary' }}
     strategy:
       fail-fast: false
       matrix:
@@ -100,10 +29,8 @@ jobs:
           - scenario: preinstalled
           # Node 24 already on PATH → the action must skip its own setup-node
           - scenario: has-node-24
-          # an explicit kirigami-version must be the one installed globally
+          # an explicit, non-latest kirigami-version must be the one installed
           - scenario: pinned-version
-          # non-blocking: does the action still work against the current `latest`?
-          - scenario: latest-canary
 
     steps:
       - name: Check out the action
@@ -122,7 +49,7 @@ jobs:
         run: |
           cp -R .action/test/fixtures/site/. .
           case "${{ matrix.scenario }}" in
-            global-cli|has-node-24|pinned-version|latest-canary)
+            global-cli|has-node-24|pinned-version)
               node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));delete p.devDependencies;fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
               ;;
             preinstalled)
@@ -134,12 +61,11 @@ jobs:
       - name: Run KiriBuild
         uses: ./.action
         with:
-          kirigami-version: ${{ (matrix.scenario == 'pinned-version' && '1.1.2') || (matrix.scenario == 'latest-canary' && 'latest') || '1.1.3' }}
+          kirigami-version: ${{ matrix.scenario == 'pinned-version' && '1.1.2' || 'latest' }}
 
       - name: Assert the fixture was exported, with every core feature
-        # pinned-version and latest-canary install a different CLI on purpose —
-        # they get their own lighter checks below.
-        if: matrix.scenario != 'pinned-version' && matrix.scenario != 'latest-canary'
+        # pinned-version installs an old CLI on purpose — it gets a lighter check below.
+        if: matrix.scenario != 'pinned-version'
         shell: bash
         run: |
           fail() { echo "::error::$1"; exit 1; }
@@ -185,7 +111,7 @@ jobs:
         run: test -f node_modules/.kiribuild-sentinel || { echo "::error::node_modules was rebuilt"; exit 1; }
 
       - name: Assert the global CLI fallback was used
-        if: matrix.scenario == 'global-cli' || matrix.scenario == 'has-node-24' || matrix.scenario == 'pinned-version' || matrix.scenario == 'latest-canary'
+        if: matrix.scenario == 'global-cli' || matrix.scenario == 'has-node-24' || matrix.scenario == 'pinned-version'
         shell: bash
         run: |
           command -v kiri >/dev/null || { echo "::error::global kiri not on PATH"; exit 1; }
@@ -201,19 +127,75 @@ jobs:
           grep -q 'KiriBuild Fixture' dist/index.html \
             || { echo "::error::pinned CLI did not render the page"; exit 1; }
 
-      - name: Canary — does the action still work against the latest CLI?
-        if: matrix.scenario == 'latest-canary'
-        shell: bash
-        run: |
-          if [ ! -f dist/index.html ] || ! grep -q 'KiriBuild Fixture' dist/index.html; then
-            echo '::error::latest @kirigami/kirigami produced no usable export — still broken upstream'
-            exit 1
-          fi
-          echo 'latest @kirigami/kirigami works — time to bump the pinned versions in this workflow.'
-
       - name: Assert the pre-installed Node was kept (setup-node skipped)
         if: matrix.scenario == 'has-node-24'
         shell: bash
         run: |
           v="$(node -v)"
           [ "$v" = "v24.0.0" ] || { echo "::error::expected v24.0.0, action re-ran setup-node and got $v"; exit 1; }
+
+  # ---------------------------------------------------------------------------
+  # Real-world test: run the action against the official Kirigami templates,
+  # which pull in the parts the fixture can't (@kirigami/canva + Sass, esbuild,
+  # the highlight plugin).
+  #
+  # template-default is required. template-demo is continue-on-error: as of
+  # @kirigami/kirigami 1.3.1 its export dies with "retobj.files.map is not a
+  # function" — an upstream bug, not the action's. Drop continue-on-error when
+  # a fixed kiri ships.
+  # ---------------------------------------------------------------------------
+  templates:
+    name: templates (${{ matrix.template }})
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.template == 'template-demo' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        template: [template-default, template-demo]
+
+    steps:
+      - name: Check out the action
+        uses: actions/checkout@v7
+        with:
+          path: .action
+
+      - name: Check out ${{ matrix.template }}
+        uses: actions/checkout@v7
+        with:
+          repository: php-kirigami/${{ matrix.template }}
+          path: .template
+
+      - name: Stage the template at the workspace root
+        shell: bash
+        run: rsync -a --exclude .git .template/ ./
+
+      - name: Run KiriBuild
+        uses: ./.action
+
+      - name: Assert the template exported (common)
+        shell: bash
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+          [ -f dist/index.html ]                    || fail "home page not exported"
+          [ -f dist/about/index.html ]              || fail "about page not exported"
+          [ -f dist/sitemap.xml ]                   || fail "sitemap.xml not generated"
+          ls dist/styles/*.css >/dev/null 2>&1      || fail "Sass task (@kirigami/canva) produced no CSS"
+          ls dist/scripts/*.js  >/dev/null 2>&1     || fail "esbuild task produced no JS"
+          if find dist -name '_*' | grep -q .; then
+            find dist -name '_*'; fail "partial source files leaked into dist/"
+          fi
+          echo "Exported $(find dist -type f | wc -l) files."
+
+      - name: Assert the demo's showcase features (template-demo)
+        if: matrix.template == 'template-demo'
+        shell: bash
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+          for p in markdown images code data tags; do
+            [ -f "dist/features/$p/index.html" ] || fail "features/$p page not exported"
+          done
+          ls dist/images/*.webp >/dev/null 2>&1                          || fail "image autogenerator produced no images"
+          grep -q 'class="swatches"' dist/features/images/index.html     || fail "custom <swatches> tag not rendered"
+          grep -q 'hljs' dist/features/code/index.html                   || fail "highlight plugin did not run"
+          grep -q 'stat__num' dist/features/data/index.html              || fail "JSON data file was not looped over"
+          grep -q 'article__meta' dist/features/data/index.html          || fail "YAML data file was not looped over"

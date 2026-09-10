@@ -157,24 +157,24 @@ This action has no outputs. Artifact upload, commits, and deployment are left to
 
 ## Local testing
 
-`.github/workflows/test.yml` has two jobs:
+`.github/workflows/test.yml` has two jobs, both on every push / PR:
 
-- **`cli-resolution`** (every push / PR) — runs the tiny fixture in
+- **`cli-resolution`** — runs the tiny fixture in
   [`test/fixtures/site`](./test/fixtures/site) through every CLI-resolution
   branch (`local-cli`, `global-cli`, `preinstalled`, `has-node-24`,
-  `pinned-version`, plus a non-blocking `latest-canary`), and checks the core
-  Kirigami feature surface on each: layouts, a data file, a Markdown block, a
-  custom tag + render hook, and the image autogenerator.
-- **`features`** (manual, `workflow_dispatch`) — runs the action against
-  [`php-kirigami/template-demo`](https://github.com/php-kirigami/template-demo)
-  for the full feature set, including the Sass/esbuild pipeline and the highlight
-  plugin.
+  `pinned-version`), and checks the core Kirigami feature surface on each:
+  layouts, a data file, a Markdown block, a custom tag + render hook, and the
+  image autogenerator.
+- **`templates`** — runs the action against the official
+  [`template-default`](https://github.com/php-kirigami/template-default) and
+  [`template-demo`](https://github.com/php-kirigami/template-demo), covering the
+  `@kirigami/canva` Sass pipeline, esbuild and the highlight plugin.
 
 Run them locally with [`act`](https://github.com/nektos/act):
 
 ```bash
 act push -j cli-resolution
-act workflow_dispatch -j features
+act push -j templates
 ```
 
 ---

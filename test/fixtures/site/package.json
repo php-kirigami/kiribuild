@@ -12,6 +12,6 @@
     "export": "kiri export"
   },
   "devDependencies": {
-    "@kirigami/kirigami": "1.1.3"
+    "@kirigami/kirigami": "latest"
   }
 }
