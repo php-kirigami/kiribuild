@@ -1,5 +1,5 @@
 name: 'KiriBuild'
-description: 'Checkout, setup Node, install Kirigami CLI (local or global), export, and commit changes'
+description: 'Ensure Node 24+ and the Kirigami CLI are available, then run kiri export'
 author: 'Maxime Larrivée-Roy'
 
 branding:
@@ -8,69 +8,67 @@ branding:
 
 inputs:
   node-version:
-    description: 'Node.js version to use'
+    description: 'Node.js version to install if the runner does not already have Node 24+'
     required: false
     default: '24'
   kirigami-version:
-    description: 'Version of @kirigami/kirigami to install globally (fallback)'
+    description: 'Version of @kirigami/kirigami to install when the project has no local copy'
     required: false
     default: 'latest'
-  lfs:
-    description: 'Whether to checkout with Git LFS'
-    required: false
-    default: 'false'
-  commit-message:
-    description: 'Commit message to use when exported files have changed'
-    required: false
-    default: 'chore: update exported files'
 
 runs:
   using: 'composite'
   steps:
-    - name: Checkout
-      uses: actions/checkout@v7
-      with:
-        lfs: ${{ inputs.lfs }}
+    - name: Check for Node 24+
+      id: node
+      shell: bash
+      run: |
+        if command -v node >/dev/null 2>&1; then
+          major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+        else
+          major=0
+        fi
+        echo "Detected Node major version: ${major:-0}"
+        if [ "${major:-0}" -ge 24 ]; then
+          echo "satisfied=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "satisfied=false" >> "$GITHUB_OUTPUT"
+        fi
 
     - name: Setup Node
+      if: steps.node.outputs.satisfied != 'true'
       uses: actions/setup-node@v7
       with:
         node-version: ${{ inputs.node-version }}
-        cache: 'npm'
 
     - name: Install project dependencies
       if: ${{ hashFiles('package.json') != '' }}
-      run: npm install
       shell: bash
-
-    - name: Install Kirigami CLI (global fallback)
-      if: ${{ hashFiles('node_modules/.bin/kiri') == '' }}
-      run: npm install -g @kirigami/kirigami@${{ inputs.kirigami-version }}
-      shell: bash
-
-    - name: Ensure global npm bin is on PATH
-      run: echo "$(npm config get prefix)/bin" >> "$GITHUB_PATH"
-      shell: bash
-
-    - name: Build and Export
       run: |
-        if [ -f "./node_modules/.bin/kiri" ]; then
+        if [ -d node_modules ]; then
+          echo "node_modules already present; skipping npm install."
+        else
+          npm install
+        fi
+
+    - name: Ensure the Kirigami CLI is available
+      shell: bash
+      run: |
+        if [ -x "./node_modules/.bin/kiri" ]; then
+          echo "Using local @kirigami/kirigami from node_modules."
+        else
+          echo "No local Kirigami CLI found; installing @kirigami/kirigami@${{ inputs.kirigami-version }} globally."
+          npm install -g "@kirigami/kirigami@${{ inputs.kirigami-version }}"
+          echo "$(npm config get prefix)/bin" >> "$GITHUB_PATH"
+        fi
+
+    - name: Export
+      shell: bash
+      run: |
+        if [ -x "./node_modules/.bin/kiri" ]; then
           KIRI_BIN="./node_modules/.bin/kiri"
         else
           KIRI_BIN="$(which kiri)"
         fi
+        echo "Running: $KIRI_BIN export"
         node --experimental-wasm-jspi "$KIRI_BIN" export
-      shell: bash
-
-    - name: Commit changes (if any)
-      run: |
-        if [ -n "$(git status --porcelain)" ]; then
-          git config user.name "kirigami[bot]"
-          git config user.email "kirigami-bot@users.noreply.github.com"
-          git add -A
-          git commit -m "${{ inputs.commit-message }} [skip ci]"
-          git push
-        else
-          echo "No changes to commit."
-        fi
-      shell: bash

@@ -1,24 +1,159 @@
-name: Test KiriBuild
+name: Test
 
 on:
   push:
+  pull_request:
   workflow_dispatch:
 
 jobs:
-  test-setup:
+  # ---------------------------------------------------------------------------
+  # Real-world test: run the action against php-kirigami/template-demo, the
+  # project that exercises every Kirigami feature (PHP templating, Markdown,
+  # YAML/JSON data files, the image autogenerator, custom tags/hooks, the
+  # highlight plugin, Sass and esbuild), and assert each one produced output.
+  # ---------------------------------------------------------------------------
+  features:
+    name: features (template-demo)
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Check out the action
         uses: actions/checkout@v7
+        with:
+          path: .action
 
-      - name: Setup Node
+      - name: Check out the Kirigami demo project
+        uses: actions/checkout@v7
+        with:
+          repository: php-kirigami/template-demo
+          path: .demo
+
+      - name: Stage the demo project at the workspace root
+        shell: bash
+        run: rsync -a --exclude .git .demo/ ./
+
+      - name: Run KiriBuild
+        uses: ./.action
+
+      - name: Assert every Kirigami feature produced output
+        shell: bash
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+
+          [ -f dist/index.html ]                              || fail "home page not exported"
+          [ -f dist/features/markdown/index.html ]            || fail "markdown page not exported"
+          [ -f dist/features/data/index.html ]                || fail "data-files page not exported"
+          [ -f dist/features/images/index.html ]              || fail "images page not exported"
+          [ -f dist/features/code/index.html ]                || fail "code page not exported"
+          [ -f dist/features/tags/index.html ]                || fail "tags & hooks page not exported"
+
+          [ -f dist/sitemap.xml ]                             || fail "sitemap.xml not generated"
+          ls dist/styles/*.css >/dev/null 2>&1                || fail "Sass task produced no CSS"
+          ls dist/scripts/*.js >/dev/null 2>&1                || fail "esbuild task produced no JS"
+
+          ls dist/images/*.webp >/dev/null 2>&1               || fail "image autogenerator produced no images"
+          grep -q 'srcset' dist/features/images/index.html    || fail "responsive <img asset> not rendered"
+          grep -q 'class="swatches"' dist/features/images/index.html \
+                                                              || fail "custom <swatches> tag not rendered"
+          grep -q 'hljs' dist/features/code/index.html        || fail "highlight plugin did not bake in styles"
+          grep -q 'stat__num' dist/features/data/index.html   || fail "JSON data file was not looped over"
+          grep -q 'article__meta' dist/features/data/index.html \
+                                                              || fail "YAML data file was not looped over"
+
+          # Partials (anything under src/ starting with "_") must never ship.
+          if find dist -name '_*' | grep -q .; then
+            find dist -name '_*'; fail "partial source files leaked into dist/"
+          fi
+
+          echo "Exported $(find dist -type f | wc -l) files."
+
+  # ---------------------------------------------------------------------------
+  # Plumbing test: a tiny fixture (test/fixtures/site) that stays valid across
+  # kiri versions, run through every CLI-resolution branch of the action.
+  # ---------------------------------------------------------------------------
+  cli-resolution:
+    name: ${{ matrix.scenario }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # package.json keeps @kirigami/kirigami → the action installs deps and
+          # uses ./node_modules/.bin/kiri
+          - scenario: local-cli
+          # dependency stripped → the action falls back to `npm install -g`
+          - scenario: global-cli
+          # deps already installed by the workflow → the action must NOT reinstall
+          - scenario: preinstalled
+          # Node 24 already on PATH → the action must skip its own setup-node
+          - scenario: has-node-24
+          # an explicit kirigami-version must be the one installed globally
+          - scenario: pinned-version
+
+    steps:
+      - name: Check out the action
+        uses: actions/checkout@v7
+        with:
+          path: .action
+
+      - name: Set up Node 24 ahead of the action
+        if: matrix.scenario == 'has-node-24'
         uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version: 24.0.0
 
-      - name: Install Kirigami CLI (global)
-        run: npm install -g @kirigami/kirigami@latest
-
-      - name: Verify kiri is available
+      - name: Stage the fixture at the workspace root
+        shell: bash
         run: |
-          node --experimental-wasm-jspi "$(which kiri)" --version
+          cp -R .action/test/fixtures/site/. .
+          case "${{ matrix.scenario }}" in
+            global-cli|has-node-24|pinned-version)
+              node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));delete p.devDependencies;fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
+              ;;
+            preinstalled)
+              npm install
+              : > node_modules/.kiribuild-sentinel
+              ;;
+          esac
+
+      - name: Run KiriBuild
+        uses: ./.action
+        with:
+          kirigami-version: ${{ matrix.scenario == 'pinned-version' && '1.1.3' || 'latest' }}
+
+      - name: Assert the fixture was exported
+        shell: bash
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+          [ -f dist/index.html ]                        || fail "dist/index.html is missing"
+          [ -f dist/about/index.html ]                  || fail "dist/about/index.html is missing"
+          grep -q 'KiriBuild Fixture' dist/index.html   || fail "project data was not rendered"
+          [ ! -e dist/_index.php ]                      || fail "source _index.php leaked into dist/"
+
+      - name: Assert the local CLI was used
+        if: matrix.scenario == 'local-cli' || matrix.scenario == 'preinstalled'
+        shell: bash
+        run: test -x ./node_modules/.bin/kiri || { echo "::error::local kiri missing"; exit 1; }
+
+      - name: Assert existing dependencies were not reinstalled
+        if: matrix.scenario == 'preinstalled'
+        shell: bash
+        run: test -f node_modules/.kiribuild-sentinel || { echo "::error::node_modules was rebuilt"; exit 1; }
+
+      - name: Assert the global CLI fallback was used
+        if: matrix.scenario == 'global-cli' || matrix.scenario == 'has-node-24' || matrix.scenario == 'pinned-version'
+        shell: bash
+        run: |
+          command -v kiri >/dev/null || { echo "::error::global kiri not on PATH"; exit 1; }
+          [ ! -e ./node_modules/.bin/kiri ] || { echo "::error::unexpected local kiri"; exit 1; }
+
+      - name: Assert the pinned kirigami-version was installed
+        if: matrix.scenario == 'pinned-version'
+        shell: bash
+        run: npm ls -g @kirigami/kirigami --depth=0 | grep -q '@1.1.3' || { echo "::error::pinned version not honoured"; exit 1; }
+
+      - name: Assert the pre-installed Node was kept (setup-node skipped)
+        if: matrix.scenario == 'has-node-24'
+        shell: bash
+        run: |
+          v="$(node -v)"
+          [ "$v" = "v24.0.0" ] || { echo "::error::expected v24.0.0, action re-ran setup-node and got $v"; exit 1; }

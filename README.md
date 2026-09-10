@@ -1,20 +1,71 @@
+<div align="center">
+
+<img src="https://zmotrin.github.io/assets/kirigami/kirigami-logo-universal.svg" alt="Kirigami" width="400" />
+
+---
+
 # KiriBuild
 
-Checkout, setup Node.js, install the [Kirigami](https://www.npmjs.com/package/@kirigami/kirigami) CLI, and export your project — in one step.
+**The reusable GitHub Action for [Kirigami](https://github.com/php-kirigami/kirigami) projects — ensure Node 24+ and the `kiri` CLI, then export.**
 
-Uses your project's local `@kirigami/kirigami` dependency if it's installed (`node_modules/.bin/kiri`), and falls back to a global install otherwise. No `package.json` required.
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D24.0.0-brightgreen)](#requirements)
+
+</div>
+
+---
+
+## Overview
+
+**KiriBuild** is a lightweight [composite GitHub Action](https://docs.github.com/actions/creating-actions/creating-a-composite-action) that prepares the toolchain a Kirigami project needs and runs its production export:
+
+- **Node 24+ on demand** — if the runner already has Node.js 24 or newer, it's left untouched; otherwise the requested version is installed.
+- **Local CLI first** — uses your project's `@kirigami/kirigami` dependency (`node_modules/.bin/kiri`) when present, and installs `@kirigami/kirigami` globally only when it isn't.
+- **One-command export** — runs `kiri export` with the WebAssembly flag `@kirigami/php-wasm` requires.
+
+Checkout, Git LFS, and committing or deploying the exported files are **left to your workflow**, so you stay in control of what happens around the export.
+
+---
+
+## Table of contents
+
+- [KiriBuild](#kiribuild)
+  - [Overview](#overview)
+  - [Table of contents](#table-of-contents)
+  - [Requirements](#requirements)
+  - [Usage](#usage)
+  - [Full example — deploy to GitHub Pages](#full-example--deploy-to-github-pages)
+  - [What it does](#what-it-does)
+  - [Inputs](#inputs)
+  - [Outputs](#outputs)
+  - [Local testing](#local-testing)
+  - [License](#license)
+  - [Author](#author)
+
+---
+
+## Requirements
+
+- A workflow that has already **checked out** the repository (`actions/checkout`).
+- Network access to the npm registry (for the CLI install / project dependencies).
+
+---
 
 ## Usage
 
 ```yaml
+- name: Checkout
+  uses: actions/checkout@v7
+
 - name: KiriBuild
-  uses: php-kirigami/kiribuild@v1
+  uses: php-kirigami/kiribuild@v2
   with:
     node-version: '24'
-    lfs: 'true'
 ```
 
-### Full example — deploy to GitHub Pages
+---
+
+## Full example — deploy to GitHub Pages
 
 ```yaml
 name: Deploy to GitHub Pages
@@ -28,7 +79,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -44,11 +95,28 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
 
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          lfs: true
+
       - name: KiriBuild
-        uses: php-kirigami/kiribuild@v1
+        uses: php-kirigami/kiribuild@v2
         with:
           node-version: '24'
-          lfs: 'true'
+
+      - name: Commit exported files
+        shell: bash
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "kirigami[bot]"
+            git config user.email "kirigami-bot@users.noreply.github.com"
+            git add -A
+            git commit -m "chore: update exported files [skip ci]"
+            git push
+          else
+            echo "No changes to commit."
+          fi
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
@@ -60,36 +128,60 @@ jobs:
         uses: actions/deploy-pages@v5
 ```
 
+---
+
 ## What it does
 
-1. **Checkout** — checks out your repository (`actions/checkout@v7`), with optional Git LFS support.
-2. **Setup Node** — installs the requested Node.js version (`actions/setup-node@v7`), with npm caching enabled.
+1. **Check for Node 24+** — if the runner already has Node.js 24 or newer, nothing happens.
+2. **Setup Node** — only when the check above fails, installs the requested Node.js version (`actions/setup-node@v7`).
 3. **Install project dependencies** — runs `npm install`, but only if a `package.json` is present in the repo.
-4. **Install Kirigami CLI (global fallback)** — installs `@kirigami/kirigami` globally, so the `kiri` CLI is always available even in repos without a `package.json`.
-5. **Build and Export** — runs `kiri export` with the `--experimental-wasm-jspi` Node flag. It uses the project's local `kiri` binary (`node_modules/.bin/kiri`) if present, otherwise the global one.
+4. **Ensure the Kirigami CLI is available** — if `node_modules/.bin/kiri` exists it's used as-is; otherwise `@kirigami/kirigami` is installed globally so `kiri` is always on `PATH`.
+5. **Export** — runs `kiri export` with the `--experimental-wasm-jspi` Node flag, preferring the project's local `kiri` binary over the global one.
+
+---
 
 ## Inputs
 
-| Name               | Description                                              | Required | Default  |
-|--------------------|------------------------------------------------------------|----------|----------|
-| `node-version`     | Node.js version to use                                    | false    | `24`     |
-| `kirigami-version`  | Version of `@kirigami/kirigami` to install globally (fallback) | false    | `latest` |
-| `lfs`              | Whether to checkout with Git LFS                           | false    | `false`  |
+| Name               | Description                                                                   | Required | Default  |
+|--------------------|-----------------------------------------------------------------------------|----------|----------|
+| `node-version`     | Node.js version to install if the runner does not already have Node 24+       | false    | `24`     |
+| `kirigami-version` | Version of `@kirigami/kirigami` to install when the project has no local copy  | false    | `latest` |
+
+---
 
 ## Outputs
 
-This action has no outputs. Artifact upload and deployment (e.g. `actions/upload-pages-artifact`, `actions/deploy-pages`) are left to your own workflow, so you stay in control of what happens to the exported files.
+This action has no outputs. Artifact upload, commits, and deployment are left to your own workflow, so you stay in control of what happens to the exported files.
+
+---
 
 ## Local testing
 
-This action can be tested locally with [`act`](https://github.com/nektos/act), using the `.github/workflows/test.yml` workflow included in this repo:
+`.github/workflows/test.yml` has two jobs:
+
+- **`features`** — runs the action against [`php-kirigami/template-demo`](https://github.com/php-kirigami/template-demo)
+  and asserts every Kirigami feature (Markdown, YAML/JSON data files, the image
+  autogenerator, custom tags/hooks, the highlight plugin, Sass, esbuild, the
+  sitemap) produced output.
+- **`cli-resolution`** — runs the tiny fixture in [`test/fixtures/site`](./test/fixtures/site)
+  through every CLI-resolution branch: `local-cli`, `global-cli`, `preinstalled`
+  (deps already there), `has-node-24` (setup-node skipped) and `pinned-version`.
+
+Run them locally with [`act`](https://github.com/nektos/act):
 
 ```bash
-act push -j test
+act push -j features
+act push -j cli-resolution
 ```
 
-See `CONTRIBUTING.md` (or the repo's workflow file) for details on the local Docker-based test setup.
+---
 
 ## License
 
-[MIT](./LICENSE) © Maxime Larrivée-Roy
+This project is distributed under the [MIT license](./LICENSE).
+
+---
+
+## Author
+
+MIT © Maxime Larrivée-Roy, 2026

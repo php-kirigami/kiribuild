@@ -1,4 +1,4 @@
-git tag -a v1.0.4 -m "Add custom name and email"
-git push origin v1.0.4
-git tag -f v1 v1.0.4
-git push origin v1 --force
+git tag -a v2.0.0 -m "v2: composite action trimmed to node/cli/export; checkout and commit moved to the caller"
+git push origin v2.0.0
+git tag -f v2 v2.0.0
+git push origin v2 --force

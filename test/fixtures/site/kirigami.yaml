@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://cdn.jsdelivr.net/gh/php-kirigami/kirigami@main/packages/kirigami/kirigami.schema.json
+
+# Minimal fixture project exercised by .github/workflows/test.yml.
+# No sass / esbuild tasks on purpose — this keeps the fixture dependency-free
+# beyond @kirigami/kirigami itself, so the test stays fast and focused on the
+# action's job: make `kiri` available and run `kiri export`.
+
+kirigami:
+  project: KiriBuild Fixture
+  baseurl: https://example.github.io/kiribuild-fixture
+  root:    src
+
+  tagline: Exported by KiriBuild.
+
+prepros:
+  before: _layouts/header.php
+  after:  _layouts/footer.php
+  format: true
