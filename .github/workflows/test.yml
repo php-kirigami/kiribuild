@@ -5,6 +5,14 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Newest @kirigami/kirigami that actually installs + exports. `latest` keeps
+# breaking (1.3.0 shipped an invalid schema; 1.3.2 depends on an unpublished
+# @kirigami/php-prepros), so the gating jobs pin this and the `latest-canary`
+# scenario tracks `latest` non-blockingly. Bump this one line when the canary
+# goes green.
+env:
+  KIRI_GOOD: "1.3.1"
+
 jobs:
   # ---------------------------------------------------------------------------
   # Plumbing + core-feature test: a tiny fixture (test/fixtures/site) that
@@ -16,6 +24,7 @@ jobs:
   cli-resolution:
     name: ${{ matrix.scenario }}
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.scenario == 'latest-canary' }}
     strategy:
       fail-fast: false
       matrix:
@@ -31,6 +40,8 @@ jobs:
           - scenario: has-node-24
           # an explicit, non-latest kirigami-version must be the one installed
           - scenario: pinned-version
+          # non-blocking: does the action still work against the current `latest`?
+          - scenario: latest-canary
 
     steps:
       - name: Check out the action
@@ -48,8 +59,10 @@ jobs:
         shell: bash
         run: |
           cp -R .action/test/fixtures/site/. .
+          # Pin the local dependency to the known-good version (fixture ships "latest").
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));p.devDependencies['@kirigami/kirigami']=process.env.KIRI_GOOD;fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
           case "${{ matrix.scenario }}" in
-            global-cli|has-node-24|pinned-version)
+            global-cli|has-node-24|pinned-version|latest-canary)
               node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));delete p.devDependencies;fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
               ;;
             preinstalled)
@@ -61,11 +74,12 @@ jobs:
       - name: Run KiriBuild
         uses: ./.action
         with:
-          kirigami-version: ${{ matrix.scenario == 'pinned-version' && '1.1.2' || 'latest' }}
+          kirigami-version: ${{ (matrix.scenario == 'pinned-version' && '1.1.2') || (matrix.scenario == 'latest-canary' && 'latest') || env.KIRI_GOOD }}
 
       - name: Assert the fixture was exported, with every core feature
-        # pinned-version installs an old CLI on purpose — it gets a lighter check below.
-        if: matrix.scenario != 'pinned-version'
+        # pinned-version / latest-canary install a different CLI on purpose —
+        # they get lighter checks below.
+        if: matrix.scenario != 'pinned-version' && matrix.scenario != 'latest-canary'
         shell: bash
         run: |
           fail() { echo "::error::$1"; exit 1; }
@@ -111,7 +125,7 @@ jobs:
         run: test -f node_modules/.kiribuild-sentinel || { echo "::error::node_modules was rebuilt"; exit 1; }
 
       - name: Assert the global CLI fallback was used
-        if: matrix.scenario == 'global-cli' || matrix.scenario == 'has-node-24' || matrix.scenario == 'pinned-version'
+        if: matrix.scenario == 'global-cli' || matrix.scenario == 'has-node-24' || matrix.scenario == 'pinned-version' || matrix.scenario == 'latest-canary'
         shell: bash
         run: |
           command -v kiri >/dev/null || { echo "::error::global kiri not on PATH"; exit 1; }
@@ -127,6 +141,16 @@ jobs:
           grep -q 'KiriBuild Fixture' dist/index.html \
             || { echo "::error::pinned CLI did not render the page"; exit 1; }
 
+      - name: Canary — does the action still work against the latest CLI?
+        if: matrix.scenario == 'latest-canary'
+        shell: bash
+        run: |
+          if [ ! -f dist/index.html ] || ! grep -q 'KiriBuild Fixture' dist/index.html; then
+            echo '::error::latest @kirigami/kirigami produced no usable export — still broken upstream'
+            exit 1
+          fi
+          echo 'latest @kirigami/kirigami works — bump KIRI_GOOD in this workflow and unpin.'
+
       - name: Assert the pre-installed Node was kept (setup-node skipped)
         if: matrix.scenario == 'has-node-24'
         shell: bash
@@ -137,12 +161,12 @@ jobs:
   # ---------------------------------------------------------------------------
   # Real-world test: run the action against the official Kirigami templates,
   # which pull in the parts the fixture can't (@kirigami/canva + Sass, esbuild,
-  # the highlight plugin).
+  # the highlight plugin). The staged package.json is pinned to KIRI_GOOD.
   #
   # template-default is required. template-demo is continue-on-error: as of
   # @kirigami/kirigami 1.3.1 its export dies with "retobj.files.map is not a
-  # function" — an upstream bug, not the action's. Drop continue-on-error when
-  # a fixed kiri ships.
+  # function" — an upstream bug, not the action. Drop continue-on-error when a
+  # fixed kiri ships and this job is green.
   # ---------------------------------------------------------------------------
   templates:
     name: templates (${{ matrix.template }})
@@ -167,7 +191,9 @@ jobs:
 
       - name: Stage the template at the workspace root
         shell: bash
-        run: rsync -a --exclude .git .template/ ./
+        run: |
+          rsync -a --exclude .git .template/ ./
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));p.devDependencies['@kirigami/kirigami']=process.env.KIRI_GOOD;fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
 
       - name: Run KiriBuild
         uses: ./.action

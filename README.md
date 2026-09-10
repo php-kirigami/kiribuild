@@ -162,9 +162,9 @@ This action has no outputs. Artifact upload, commits, and deployment are left to
 - **`cli-resolution`** — runs the tiny fixture in
   [`test/fixtures/site`](./test/fixtures/site) through every CLI-resolution
   branch (`local-cli`, `global-cli`, `preinstalled`, `has-node-24`,
-  `pinned-version`), and checks the core Kirigami feature surface on each:
-  layouts, a data file, a Markdown block, a custom tag + render hook, and the
-  image autogenerator.
+  `pinned-version`, plus a non-blocking `latest-canary`), and checks the core
+  Kirigami feature surface on each: layouts, a data file, a Markdown block, a
+  custom tag + render hook, and the image autogenerator.
 - **`templates`** — runs the action against the official
   [`template-default`](https://github.com/php-kirigami/template-default) and
   [`template-demo`](https://github.com/php-kirigami/template-demo), covering the

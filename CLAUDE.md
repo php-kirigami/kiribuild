@@ -110,28 +110,36 @@ The `-f` / `--force` is expected — but only ever on the floating major tag.
 
 `.github/workflows/test.yml` has two jobs, both on every push / PR:
 
-- **`cli-resolution`** — a matrix over `test/fixtures/site`, a tiny project
-  depending only on `@kirigami/kirigami` (`latest`). Scenarios: `local-cli`,
-  `global-cli`, `preinstalled` (asserts `npm install` is skipped, via a sentinel
-  file in `node_modules/`), `has-node-24` (pins Node `24.0.0` first, asserts the
-  action's setup-node is skipped by checking `node -v` is still `v24.0.0`),
-  `pinned-version` (installs `kirigami-version: 1.1.2` — a non-latest value — and
-  asserts that exact version lands and still exports). Every non-pinned scenario
-  also asserts the core feature surface: layouts, `@stats` data file,
-  `<markdown>`, a custom `<uppercase>` tag, a `post_render` hook, the image
-  autogenerator (`dist/images/*.webp`), sitemap.
-- **`templates`** — a matrix over the official templates, staged at the workspace
-  root and run through the action. `template-default` is **required** (asserts
-  pages + `@kirigami/canva` Sass output + esbuild output + sitemap).
-  `template-demo` is **`continue-on-error`**: as of `@kirigami/kirigami` 1.3.1 its
-  export dies with `retobj.files.map is not a function` (an upstream bug).
-  When a fixed kiri ships, drop `continue-on-error`.
+The workflow has a top-level `env: KIRI_GOOD` — the newest `@kirigami/kirigami`
+that actually installs + exports. `latest` keeps breaking, so the gating jobs
+pin `KIRI_GOOD` (the fixture and templates ship `latest` in their package.json;
+the workflow rewrites it before the action runs). Bump that one line when the
+`latest-canary` scenario goes green.
 
-Published-version history worth knowing: `@kirigami/kirigami` **1.2.0** (broken
-bin) and **1.3.0** (invalid bundled `kirigami.schema.json`, ajv rejects it at
-load) both fail every `kiri export`. **1.3.1** fixed the schema and works for the
-fixture + `template-default`, but not `template-demo` (above). `1.1.3` was the
-last good release before that gap.
+- **`cli-resolution`** — a matrix over `test/fixtures/site`, a tiny project
+  depending only on `@kirigami/kirigami`. Scenarios: `local-cli`, `global-cli`,
+  `preinstalled` (asserts `npm install` is skipped, via a sentinel file in
+  `node_modules/`), `has-node-24` (pins Node `24.0.0` first, asserts the action's
+  setup-node is skipped by checking `node -v` is still `v24.0.0`),
+  `pinned-version` (installs `kirigami-version: 1.1.2` — a non-latest value — and
+  asserts that exact version lands and still exports), `latest-canary`
+  (`continue-on-error`, non-blocking — runs `latest`; green ⇒ bump `KIRI_GOOD`).
+  Every full scenario also asserts the core feature surface: layouts, `@stats`
+  data file, `<markdown>`, a custom `<uppercase>` tag, a `post_render` hook, the
+  image autogenerator (`dist/images/*.webp`), sitemap.
+- **`templates`** — a matrix over the official templates (pinned to `KIRI_GOOD`),
+  staged at the workspace root and run through the action. `template-default` is
+  **required** (asserts pages + `@kirigami/canva` Sass output + esbuild output +
+  sitemap). `template-demo` is **`continue-on-error`**: as of `@kirigami/kirigami`
+  1.3.1 its export dies with `retobj.files.map is not a function` (upstream bug).
+  Drop `continue-on-error` when a fixed kiri ships and the job is green.
+
+Published-version history worth knowing (all block `kiri export` / install):
+`@kirigami/kirigami` **1.2.0** (broken bin), **1.3.0** (invalid bundled
+`kirigami.schema.json`), **1.3.2** (depends on unpublished
+`@kirigami/php-prepros@1.6.1`). **1.3.1** works for the fixture +
+`template-default` (not `template-demo`). `1.1.3` was the last good release
+before the streak.
 
 Run locally with `act` (Docker-based): `act push -j cli-resolution`,
 `act push -j templates`. `.actrc` is currently empty.
@@ -164,6 +172,9 @@ Run locally with `act` (Docker-based): `act push -j cli-resolution`,
 - `actions/checkout@v7` / `actions/setup-node@v7` are pinned ahead of what's
   released — verify these resolve on GitHub before relying on them.
 - No caching of the global `@kirigami/kirigami` install on the fallback path.
+- **`@kirigami/kirigami@latest` on npm is chronically broken** — the tests pin
+  `env: KIRI_GOOD` (currently `1.3.1`) and a `latest-canary` scenario flags when
+  a good release lands. Bump `KIRI_GOOD` then.
 - **`template-demo` export is broken on `@kirigami/kirigami` 1.3.1**
   (`retobj.files.map is not a function`) — the `templates` job keeps it as
   `continue-on-error`. Remove that once a fixed kiri ships and the job is green.
