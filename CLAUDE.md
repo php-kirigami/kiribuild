@@ -114,12 +114,13 @@ The `-f` / `--force` is expected — but only ever on the floating major tag.
 `.github/workflows/test.yml` has two jobs, both on every push / PR:
 
 The workflow has a top-level `env: KIRI_GOOD` — the newest `@kirigami/kirigami`
-known to install + export cleanly (currently `1.3.2`). `latest` has a history of
-shipping broken, so the gating jobs pin `KIRI_GOOD` (the workflow rewrites each
-staged `package.json`'s `@kirigami/kirigami` to `KIRI_GOOD` — and drops any
-committed lockfile — before the action runs). Bump that one line once
-`latest-canary` has been green for a while — or
-drop the pinning if upstream releases stabilise.
+known to install + export cleanly (currently `1.4.1`; **must be ≥ 1.4.0** now
+that the official templates use the `meta:` block, which older kiri rejects).
+`latest` has a history of shipping broken, so the gating jobs pin `KIRI_GOOD`
+(the workflow rewrites each staged `package.json`'s `@kirigami/kirigami` to
+`KIRI_GOOD` — and drops any committed lockfile — before the action runs). Bump
+that one line once `latest-canary` has been green for a while — or drop the
+pinning if upstream releases stabilise.
 
 - **`cli-resolution`** — a matrix over `test/fixtures/site`, a tiny project
   depending only on `@kirigami/kirigami`. Scenarios: `local-cli`, `global-cli`,
@@ -145,8 +146,10 @@ Published-version history worth knowing: `@kirigami/kirigami` **1.2.0** (broken
 bin), **1.3.0** (invalid bundled `kirigami.schema.json`), and briefly **1.3.2**
 (dep `@kirigami/php-prepros@1.6.1` lagged the CDN) each blocked every
 `kiri export` / install. **1.3.1** worked for the fixture + `template-default`
-but not `template-demo` (`retobj.files.map` render bug); **1.3.2** fixed that and
-is the current `KIRI_GOOD`. `1.1.3` was the last good release before the streak.
+but not `template-demo` (`retobj.files.map` render bug); **1.3.2** fixed that.
+**1.4.0 / 1.4.1** carry `META` + the `###TIMESTAMP###` render fix and are the
+first `latest` in the streak to go reliably green — `KIRI_GOOD` is now `1.4.1`.
+`1.1.3` was the last good release before the streak.
 
 Run locally with `act` (Docker-based): `act push -j cli-resolution`,
 `act push -j templates`. `.actrc` is currently empty.
@@ -179,9 +182,9 @@ Run locally with `act` (Docker-based): `act push -j cli-resolution`,
 - `actions/checkout@v7` / `actions/setup-node@v7` are pinned ahead of what's
   released — verify these resolve on GitHub before relying on them.
 - No caching of the global `@kirigami/kirigami` install on the fallback path.
-- **`@kirigami/kirigami@latest` has been flaky** — the tests pin `env: KIRI_GOOD`
-  (currently `1.3.2`) and a `latest-canary` scenario flags regressions. Bump
-  `KIRI_GOOD` (or drop the pin) once `latest` has been reliably green.
+- **`@kirigami/kirigami@latest` was flaky through 1.2–1.3** — the tests pin
+  `env: KIRI_GOOD` (now `1.4.1`) and a `latest-canary` scenario flags
+  regressions. Consider dropping the pin if 1.4.x stays green.
 - `cli-resolution`'s `pinned-version` scenario hardcodes `1.1.2`; bump it if that
   version is ever unpublished.
 

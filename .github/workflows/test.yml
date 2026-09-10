@@ -10,8 +10,10 @@ on:
 # published dep), so the gating jobs pin this while the non-blocking
 # `latest-canary` scenario tracks `latest`. When the canary is green and stays
 # green, bump this line (or drop the pinning entirely).
+# 1.4.1: the official templates now use the `meta:` block (kiri 1.4.0+); 1.3.2
+# rejects it, so `templates` can't run older than 1.4.x.
 env:
-  KIRI_GOOD: "1.3.2"
+  KIRI_GOOD: "1.4.1"
 
 jobs:
   # ---------------------------------------------------------------------------
