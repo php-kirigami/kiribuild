@@ -46,7 +46,10 @@ runs:
       shell: bash
       run: |
         if [ -d node_modules ]; then
-          echo "node_modules already present; skipping npm install."
+          echo "node_modules already present; skipping install."
+        elif [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+          echo "Lockfile present; using 'npm ci' (leaves the lockfile untouched)."
+          npm ci
         else
           npm install
         fi

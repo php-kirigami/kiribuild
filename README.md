@@ -134,7 +134,7 @@ jobs:
 
 1. **Check for Node 24+** — if the runner already has Node.js 24 or newer, nothing happens.
 2. **Setup Node** — only when the check above fails, installs the requested Node.js version (`actions/setup-node@v7`).
-3. **Install project dependencies** — runs `npm install`, but only if a `package.json` is present in the repo.
+3. **Install project dependencies** — only when a `package.json` is present, and skipped if `node_modules/` is already there. Uses `npm ci` when a `package-lock.json` (or `npm-shrinkwrap.json`) is committed — so a checked-in lockfile is never rewritten by the build — and falls back to `npm install` otherwise.
 4. **Ensure the Kirigami CLI is available** — if `node_modules/.bin/kiri` exists it's used as-is; otherwise `@kirigami/kirigami` is installed globally so `kiri` is always on `PATH`.
 5. **Export** — runs `kiri export` with the `--experimental-wasm-jspi` Node flag, preferring the project's local `kiri` binary over the global one.
 

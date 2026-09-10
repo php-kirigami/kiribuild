@@ -53,9 +53,12 @@ Composite steps, in order. The caller has **already checked out** the repo.
 2. **Setup Node** — `actions/setup-node@v7`, `node-version` input; runs **only
    if `satisfied != 'true'`**. No `cache:` (there may be no lockfile, and
    caching is the caller's call).
-3. **Install project dependencies** — `npm install`, only if `package.json`
-   exists (`hashFiles('package.json') != ''`) **and** `node_modules/` is absent
-   (so a caller that already ran `npm ci` isn't re-run).
+3. **Install project dependencies** — only if `package.json` exists
+   (`hashFiles('package.json') != ''`) **and** `node_modules/` is absent (so a
+   caller that already installed isn't re-run). `npm ci` when a
+   `package-lock.json` / `npm-shrinkwrap.json` is committed (it never rewrites
+   the lockfile, so the caller's `git add -A` commit-back step has nothing to
+   pick up); `npm install` otherwise.
 4. **Ensure the Kirigami CLI is available** — if `./node_modules/.bin/kiri` is
    missing, `npm install -g @kirigami/kirigami@<kirigami-version>` and append
    `$(npm config get prefix)/bin` to `$GITHUB_PATH`.
@@ -112,15 +115,19 @@ The `-f` / `--force` is expected — but only ever on the floating major tag.
 
 The workflow has a top-level `env: KIRI_GOOD` — the newest `@kirigami/kirigami`
 known to install + export cleanly (currently `1.3.2`). `latest` has a history of
-shipping broken, so the gating jobs pin `KIRI_GOOD` (the fixture and templates
-ship `latest` in their package.json; the workflow rewrites it before the action
-runs). Bump that one line once `latest-canary` has been green for a while — or
+shipping broken, so the gating jobs pin `KIRI_GOOD` (the workflow rewrites each
+staged `package.json`'s `@kirigami/kirigami` to `KIRI_GOOD` — and drops any
+committed lockfile — before the action runs). Bump that one line once
+`latest-canary` has been green for a while — or
 drop the pinning if upstream releases stabilise.
 
 - **`cli-resolution`** — a matrix over `test/fixtures/site`, a tiny project
   depending only on `@kirigami/kirigami`. Scenarios: `local-cli`, `global-cli`,
   `preinstalled` (asserts `npm install` is skipped, via a sentinel file in
-  `node_modules/`), `has-node-24` (pins Node `24.0.0` first, asserts the action's
+  `node_modules/`), `lockfile` (writes a `package-lock.json` via
+  `npm install --package-lock-only` and no `node_modules/`, asserts the action
+  takes the `npm ci` branch and still exports), `has-node-24` (pins Node
+  `24.0.0` first, asserts the action's
   setup-node is skipped by checking `node -v` is still `v24.0.0`),
   `pinned-version` (installs `kirigami-version: 1.1.2` — a non-latest value — and
   asserts that exact version lands and still exports), `latest-canary`

@@ -36,6 +36,8 @@ jobs:
           - scenario: global-cli
           # deps already installed by the workflow → the action must NOT reinstall
           - scenario: preinstalled
+          # a committed package-lock.json → the action must use `npm ci`
+          - scenario: lockfile
           # Node 24 already on PATH → the action must skip its own setup-node
           - scenario: has-node-24
           # an explicit, non-latest kirigami-version must be the one installed
@@ -68,6 +70,11 @@ jobs:
             preinstalled)
               npm install
               : > node_modules/.kiribuild-sentinel
+              ;;
+            lockfile)
+              # write package-lock.json but no node_modules, so the action's
+              # install step runs and must pick `npm ci`
+              npm install --package-lock-only
               ;;
           esac
 
@@ -115,9 +122,19 @@ jobs:
           find dist -type f | sort
 
       - name: Assert the local CLI was used
-        if: matrix.scenario == 'local-cli' || matrix.scenario == 'preinstalled'
+        if: matrix.scenario == 'local-cli' || matrix.scenario == 'preinstalled' || matrix.scenario == 'lockfile'
         shell: bash
         run: test -x ./node_modules/.bin/kiri || { echo "::error::local kiri missing"; exit 1; }
+
+      - name: Assert the committed lockfile was used ('npm ci')
+        if: matrix.scenario == 'lockfile'
+        shell: bash
+        run: |
+          [ -d node_modules ]       || { echo "::error::install step did not run"; exit 1; }
+          [ -f package-lock.json ]  || { echo "::error::lockfile vanished"; exit 1; }
+          # npm ci refuses a lockfile that's out of sync with package.json, so a
+          # clean export here is itself proof the ci path ran.
+          [ -f dist/index.html ]    || { echo "::error::no export"; exit 1; }
 
       - name: Assert existing dependencies were not reinstalled
         if: matrix.scenario == 'preinstalled'
@@ -188,6 +205,10 @@ jobs:
         run: |
           rsync -a --exclude .git .template/ ./
           node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));p.devDependencies['@kirigami/kirigami']=process.env.KIRI_GOOD;fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
+          # the KIRI_GOOD pin above desyncs any committed lockfile — drop it so
+          # the action installs fresh (its `npm ci` branch is covered by the
+          # cli-resolution 'lockfile' scenario instead)
+          rm -f package-lock.json npm-shrinkwrap.json
 
       - name: Run KiriBuild
         uses: ./.action
