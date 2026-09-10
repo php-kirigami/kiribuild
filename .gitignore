@@ -5,5 +5,11 @@
 /test/fixtures/site/.cache.db
 /test/fixtures/site/.node.db
 
+# `kiri` renders these into the fixture's src/ tree from the _*.php sources
+/test/fixtures/site/src/images/
+/test/fixtures/site/src/**/index.html
+/test/fixtures/site/src/robots.txt
+/test/fixtures/site/src/sitemap.xml
+
 Thumbs.db
 .DS_Store

@@ -110,19 +110,24 @@ The `-f` / `--force` is expected — but only ever on the floating major tag.
 
 `.github/workflows/test.yml` has two jobs:
 
-- **`features`** — checks out `php-kirigami/template-demo`, runs the action
-  against it, and asserts every Kirigami feature produced output (pages, image
-  autogenerator `dist/images/*.webp`, `<swatches>` custom tag, highlight plugin,
-  YAML/JSON data loops, Sass + esbuild task outputs, `sitemap.xml`). If the demo
-  or the ecosystem breaks, this goes red — that's intentional signal.
-- **`cli-resolution`** — a matrix over `test/fixtures/site` (a deliberately tiny
-  project that stays valid across kiri versions): `local-cli`, `global-cli`,
-  `preinstalled` (asserts `npm install` is skipped via a sentinel file),
-  `has-node-24` (pins Node `24.0.0` first, asserts the action's setup-node is
-  skipped), `pinned-version` (asserts `kirigami-version: 1.1.3` is what lands).
+- **`cli-resolution`** (runs on every push / PR) — a matrix over
+  `test/fixtures/site`, a tiny project that depends only on `@kirigami/kirigami`.
+  Scenarios: `local-cli`, `global-cli`, `preinstalled` (asserts `npm install` is
+  skipped, via a sentinel file in `node_modules/`), `has-node-24` (pins Node
+  `24.0.0` first, asserts the action's setup-node is skipped by checking
+  `node -v` is still `v24.0.0`), `pinned-version` (installs `kirigami-version:
+  1.1.2` — an old published CLI — and asserts that exact version lands and still
+  exports). Every non-pinned scenario also asserts the core feature surface:
+  layouts, `@stats` data file, `<markdown>`, a custom `<uppercase>` tag, a
+  `post_render` hook, the image autogenerator (`dist/images/*.webp`), sitemap.
+- **`features`** (`workflow_dispatch` only) — checks out `php-kirigami/template-demo`
+  and asserts the *full* feature set incl. `@kirigami/canva`,
+  `@kirigami/plugin-highlight`, Sass and esbuild. Manual-only because those
+  packages aren't on npm yet, so a clean `npm install` of the demo fails. Flip
+  the `if:` to `push` once the ecosystem is published.
 
-Run locally with `act` (Docker-based): `act push -j features` /
-`act push -j cli-resolution`. `.actrc` is currently empty.
+Run locally with `act` (Docker-based): `act push -j cli-resolution`,
+`act workflow_dispatch -j features`. `.actrc` is currently empty.
 
 ---
 
@@ -152,9 +157,13 @@ Run locally with `act` (Docker-based): `act push -j features` /
 - `actions/checkout@v7` / `actions/setup-node@v7` are pinned ahead of what's
   released — verify these resolve on GitHub before relying on them.
 - No caching of the global `@kirigami/kirigami` install on the fallback path.
-- `cli-resolution`'s `pinned-version` scenario hardcodes `1.1.3` (current npm
-  `latest`); bump it when a newer non-`latest` value would be a better probe.
-- The `v2` tag still needs to be cut (see `push.bat`).
+- `cli-resolution`'s `pinned-version` scenario hardcodes `1.1.2`; bump it if that
+  version is ever unpublished.
+- `features` job is `workflow_dispatch`-only until `@kirigami/canva@^2` and
+  `@kirigami/plugin-highlight` are published to npm — then switch its `if:` to
+  `push` and drop this note.
+- The published `@kirigami/kirigami` (1.1.3) lags the monorepo (1.3.0); the
+  fixture uses `latest`, so the tests exercise whatever npm currently serves.
 
 ---
 

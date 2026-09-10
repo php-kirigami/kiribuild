@@ -8,12 +8,17 @@ on:
 jobs:
   # ---------------------------------------------------------------------------
   # Real-world test: run the action against php-kirigami/template-demo, the
-  # project that exercises every Kirigami feature (PHP templating, Markdown,
-  # YAML/JSON data files, the image autogenerator, custom tags/hooks, the
-  # highlight plugin, Sass and esbuild), and assert each one produced output.
+  # project that exercises the whole Kirigami feature set including the parts
+  # that need extra packages (@kirigami/canva, @kirigami/plugin-highlight,
+  # Sass, esbuild).
+  #
+  # Manual-only for now: template-demo pins @kirigami/canva ^2 and
+  # @kirigami/plugin-highlight, which aren't on npm yet, so a clean `npm
+  # install` fails. Flip this to `push` once the ecosystem is published.
   # ---------------------------------------------------------------------------
   features:
     name: features (template-demo)
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Check out the action
@@ -59,7 +64,6 @@ jobs:
           grep -q 'article__meta' dist/features/data/index.html \
                                                               || fail "YAML data file was not looped over"
 
-          # Partials (anything under src/ starting with "_") must never ship.
           if find dist -name '_*' | grep -q .; then
             find dist -name '_*'; fail "partial source files leaked into dist/"
           fi
@@ -67,8 +71,11 @@ jobs:
           echo "Exported $(find dist -type f | wc -l) files."
 
   # ---------------------------------------------------------------------------
-  # Plumbing test: a tiny fixture (test/fixtures/site) that stays valid across
-  # kiri versions, run through every CLI-resolution branch of the action.
+  # Plumbing + core-feature test: a tiny fixture (test/fixtures/site) that
+  # depends only on @kirigami/kirigami, run through every CLI-resolution branch
+  # of the action. Each run also asserts the core Kirigami feature surface:
+  # PHP layouts, a data file, a Markdown block, a custom tag + render hook and
+  # the image autogenerator.
   # ---------------------------------------------------------------------------
   cli-resolution:
     name: ${{ matrix.scenario }}
@@ -118,16 +125,45 @@ jobs:
       - name: Run KiriBuild
         uses: ./.action
         with:
-          kirigami-version: ${{ matrix.scenario == 'pinned-version' && '1.1.3' || 'latest' }}
+          kirigami-version: ${{ matrix.scenario == 'pinned-version' && '1.1.2' || 'latest' }}
 
-      - name: Assert the fixture was exported
+      - name: Assert the fixture was exported, with every core feature
+        # pinned-version deliberately installs an old CLI to prove the input is
+        # honoured — don't assert current feature behaviour against it.
+        if: matrix.scenario != 'pinned-version'
         shell: bash
         run: |
           fail() { echo "::error::$1"; exit 1; }
-          [ -f dist/index.html ]                        || fail "dist/index.html is missing"
-          [ -f dist/about/index.html ]                  || fail "dist/about/index.html is missing"
-          grep -q 'KiriBuild Fixture' dist/index.html   || fail "project data was not rendered"
-          [ ! -e dist/_index.php ]                      || fail "source _index.php leaked into dist/"
+          html=dist/index.html
+
+          # PHP layouts + page data
+          [ -f "$html" ]                               || fail "dist/index.html is missing"
+          [ -f dist/about/index.html ]                 || fail "dist/about/index.html is missing"
+          grep -q 'KiriBuild Fixture' "$html"          || fail "project data was not rendered"
+
+          # render hook (post_render token swap)
+          grep -q 'Built by KiriBuild' "$html"         || fail "post_render hook did not run"
+          ! grep -q '{{built-by}}' "$html"             || fail "post_render token left unreplaced"
+
+          # custom tag
+          grep -q 'class="up">GENERATED' "$html"       || fail "custom <uppercase> tag did not render"
+
+          # data file (@stats _stats.json)
+          grep -q 'Runtime dependencies' "$html"       || fail "JSON data file was not looped over"
+
+          # Markdown block
+          grep -q 'A list item' "$html"                || fail "<markdown> block was not converted"
+          ! grep -q '<markdown>' "$html"               || fail "<markdown> tag left in output"
+
+          # image autogenerator
+          ls dist/images/*.webp >/dev/null 2>&1        || fail "image autogenerator produced no webp"
+
+          # sitemap + no leaked partials
+          [ -f dist/sitemap.xml ]                      || fail "sitemap.xml not generated"
+          ! find dist -name '_*' | grep -q .           || fail "partial source files leaked into dist/"
+
+          echo "Exported $(find dist -type f | wc -l) files:"
+          find dist -type f | sort
 
       - name: Assert the local CLI was used
         if: matrix.scenario == 'local-cli' || matrix.scenario == 'preinstalled'
@@ -146,10 +182,15 @@ jobs:
           command -v kiri >/dev/null || { echo "::error::global kiri not on PATH"; exit 1; }
           [ ! -e ./node_modules/.bin/kiri ] || { echo "::error::unexpected local kiri"; exit 1; }
 
-      - name: Assert the pinned kirigami-version was installed
+      - name: Assert the pinned kirigami-version was installed and exported
         if: matrix.scenario == 'pinned-version'
         shell: bash
-        run: npm ls -g @kirigami/kirigami --depth=0 | grep -q '@1.1.3' || { echo "::error::pinned version not honoured"; exit 1; }
+        run: |
+          npm ls -g @kirigami/kirigami --depth=0 | grep -q '@1.1.2' \
+            || { echo "::error::pinned version not honoured"; exit 1; }
+          [ -f dist/index.html ] || { echo "::error::pinned CLI produced no output"; exit 1; }
+          grep -q 'KiriBuild Fixture' dist/index.html \
+            || { echo "::error::pinned CLI did not render the page"; exit 1; }
 
       - name: Assert the pre-installed Node was kept (setup-node skipped)
         if: matrix.scenario == 'has-node-24'

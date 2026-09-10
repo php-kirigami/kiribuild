@@ -1,9 +1,10 @@
 # yaml-language-server: $schema=https://cdn.jsdelivr.net/gh/php-kirigami/kirigami@main/packages/kirigami/kirigami.schema.json
 
-# Minimal fixture project exercised by .github/workflows/test.yml.
-# No sass / esbuild tasks on purpose — this keeps the fixture dependency-free
-# beyond @kirigami/kirigami itself, so the test stays fast and focused on the
-# action's job: make `kiri` available and run `kiri export`.
+# Fixture project for .github/workflows/test.yml (the `cli-resolution` job).
+# Deliberately depends on nothing but @kirigami/kirigami itself — no @kirigami/canva,
+# no plugins, no Sass/esbuild tasks — so it installs and exports on any published
+# kiri version. It still exercises the core feature surface: PHP layouts, a data
+# file, a Markdown block, a custom tag + render hook, and the image autogenerator.
 
 kirigami:
   project: KiriBuild Fixture
@@ -12,7 +13,13 @@ kirigami:
 
   tagline: Exported by KiriBuild.
 
+image:
+  format: webp
+  source: assets
+  dest:   images
+
 prepros:
-  before: _layouts/header.php
-  after:  _layouts/footer.php
-  format: true
+  before:   _layouts/header.php
+  after:    _layouts/footer.php
+  includes: [_lib/functions.php]
+  format:   true

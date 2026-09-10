@@ -1,0 +1,6 @@
+{
+  "metrics": [
+    { "label": "Runtime dependencies", "value": "0" },
+    { "label": "Config files", "value": "1" }
+  ]
+}
