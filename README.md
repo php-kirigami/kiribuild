@@ -8,6 +8,7 @@
 
 **The reusable GitHub Action for [Kirigami](https://github.com/php-kirigami/kirigami) projects — ensure Node 24+ and the `kiri` CLI, then export.**
 
+[![GitHub Marketplace](https://img.shields.io/badge/marketplace-KiriBuild-blue?logo=github)](https://github.com/marketplace/actions/kiribuild)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D24.0.0-brightgreen)](#requirements)
 
@@ -24,6 +25,8 @@
 - **One-command export** — runs `kiri export` with the WebAssembly flag `@kirigami/php-wasm` requires.
 
 Checkout, Git LFS, and committing or deploying the exported files are **left to your workflow**, so you stay in control of what happens around the export.
+
+Published on the **[GitHub Marketplace](https://github.com/marketplace/actions/kiribuild)** — search "KiriBuild" from a workflow file's Actions sidebar, or reference `php-kirigami/kiribuild@v2` directly as shown below.
 
 ---
 
