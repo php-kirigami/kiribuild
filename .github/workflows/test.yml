@@ -17,8 +17,12 @@ on:
 # fail outright ("Plugin ... requires @kirigami/kirigami >= 1.4.3"), not just
 # behave differently. `latest-canary` had stayed green, so bumped straight to
 # the current `latest` per the note above instead of the bare 1.4.3 floor.
+# 2.0.0: the official templates now use the top-level `seo:` block (2.0.0
+# merged `meta:`/`jsonld:` into it); 1.5.5 rejects it ("(root) must NOT have
+# additional properties"), failing both `templates` jobs. Last release that
+# still ships `kiri` itself: from 3.0.0 on it lives in @kirigami/cli.
 env:
-  KIRI_GOOD: "1.5.5"
+  KIRI_GOOD: "2.0.0"
 
 jobs:
   # ---------------------------------------------------------------------------

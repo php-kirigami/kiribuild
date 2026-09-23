@@ -120,8 +120,9 @@ The `-f` / `--force` is expected — but only ever on the floating major tag.
 `.github/workflows/test.yml` has two jobs, both on every push / PR:
 
 The workflow has a top-level `env: KIRI_GOOD` — the newest `@kirigami/kirigami`
-known to install + export cleanly (currently `1.4.1`; **must be ≥ 1.4.0** now
-that the official templates use the `meta:` block, which older kiri rejects).
+known to install + export cleanly (currently `2.0.0`; **must be ≥ 2.0.0** now
+that the official templates use the top-level `seo:` block, which older kiri
+rejects). 2.0.0 is also the last core release that ships `kiri` itself.
 `latest` has a history of shipping broken, so the gating jobs pin `KIRI_GOOD`
 (the workflow rewrites each staged `package.json`'s `@kirigami/kirigami` to
 `KIRI_GOOD` — and drops any committed lockfile — before the action runs). Bump
