@@ -21,7 +21,7 @@
 **KiriBuild** is a lightweight [composite GitHub Action](https://docs.github.com/actions/creating-actions/creating-a-composite-action) that prepares the toolchain a Kirigami project needs and runs its production export:
 
 - **Node 24+ on demand** — if the runner already has Node.js 24 or newer, it's left untouched; otherwise the requested version is installed.
-- **Local CLI first** — uses your project's `@kirigami/kirigami` dependency (`node_modules/.bin/kiri`) when present, and installs `@kirigami/kirigami` globally only when it isn't.
+- **Local CLI first** — uses your project's own `kiri` (`node_modules/.bin/kiri`, installed by `@kirigami/cli`, or by `@kirigami/kirigami` before 3.0.0) when present, and installs `@kirigami/cli` globally only when it isn't.
 - **One-command export** — runs `kiri export` with the WebAssembly flag `@kirigami/php-wasm` requires.
 
 Checkout, Git LFS, and committing or deploying the exported files are **left to your workflow**, so you stay in control of what happens around the export.
@@ -138,8 +138,8 @@ jobs:
 1. **Check for Node 24+** — if the runner already has Node.js 24 or newer, nothing happens.
 2. **Setup Node** — only when the check above fails, installs the requested Node.js version (`actions/setup-node@v7`).
 3. **Install project dependencies** — only when a `package.json` is present, and skipped if `node_modules/` is already there. Uses `npm ci` when a `package-lock.json` (or `npm-shrinkwrap.json`) is committed — so a checked-in lockfile is never rewritten by the build — and falls back to `npm install` otherwise.
-4. **Ensure the Kirigami CLI is available** — if `node_modules/.bin/kiri` exists it's used as-is; otherwise `@kirigami/kirigami` is installed globally so `kiri` is always on `PATH`.
-5. **Export** — runs `kiri export` with the `--experimental-wasm-jspi` Node flag, preferring the project's local `kiri` binary over the global one.
+4. **Ensure the Kirigami CLI is available** — if `node_modules/.bin/kiri` exists it's used as-is; otherwise `@kirigami/cli` is installed globally so `kiri` is always on `PATH` (or `@kirigami/kirigami`, when the legacy `kirigami-version` input is set). A project that depends on `@kirigami/kirigami` without `@kirigami/cli` gets a warning: the global `kiri` then runs its own engine version rather than the project's.
+5. **Export** — runs `kiri export` (adding the `--experimental-wasm-jspi` Node flag on Node versions that still need it, i.e. Node 24), preferring the project's local `kiri` binary over the global one.
 
 ---
 
@@ -148,7 +148,10 @@ jobs:
 | Name               | Description                                                                   | Required | Default  |
 |--------------------|-----------------------------------------------------------------------------|----------|----------|
 | `node-version`     | Node.js version to install if the runner does not already have Node 24+       | false    | `24`     |
-| `kirigami-version` | Version of `@kirigami/kirigami` to install when the project has no local copy  | false    | `latest` |
+| `cli-version`      | Version of `@kirigami/cli` to install globally when the project has no local `kiri` | false | `latest` |
+| `kirigami-version` | Legacy: install this `@kirigami/kirigami` version globally instead of `@kirigami/cli`. Only versions before 3.0.0 ship `kiri` | false | *(empty)* |
+
+Since `@kirigami/kirigami` 3.0.0, the `kiri` command lives in `@kirigami/cli`. The recommended setup is to add `@kirigami/cli` to the project's `devDependencies`, so the action uses the locally pinned CLI.
 
 ---
 
@@ -164,8 +167,9 @@ This action has no outputs. Artifact upload, commits, and deployment are left to
 
 - **`cli-resolution`** — runs the tiny fixture in
   [`test/fixtures/site`](./test/fixtures/site) through every CLI-resolution
-  branch (`local-cli`, `global-cli`, `preinstalled`, `has-node-24`,
-  `pinned-version`, plus a non-blocking `latest-canary`), and checks the core
+  branch (`local-cli`, `local-cli-package`, `global-cli`, `preinstalled`,
+  `lockfile`, `has-node-24`, `pinned-version`, plus a non-blocking
+  `latest-canary`), and checks the core
   Kirigami feature surface on each: layouts, a data file, a Markdown block, a
   custom tag + render hook, and the image autogenerator.
 - **`templates`** — runs the action against the official

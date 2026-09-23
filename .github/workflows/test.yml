@@ -31,7 +31,8 @@ jobs:
   cli-resolution:
     name: ${{ matrix.scenario }}
     runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.scenario == 'latest-canary' }}
+    # local-cli-package stays non-blocking until @kirigami/cli is published.
+    continue-on-error: ${{ matrix.scenario == 'latest-canary' || matrix.scenario == 'local-cli-package' }}
     strategy:
       fail-fast: false
       matrix:
@@ -49,7 +50,10 @@ jobs:
           - scenario: has-node-24
           # an explicit, non-latest kirigami-version must be the one installed
           - scenario: pinned-version
-          # non-blocking: does the action still work against the current `latest`?
+          # package.json depends on @kirigami/cli (core 3.0.0+ layout) → the
+          # action uses the kiri that @kirigami/cli installs locally
+          - scenario: local-cli-package
+          # non-blocking: does the default global fallback (@kirigami/cli@latest) work?
           - scenario: latest-canary
 
     steps:
@@ -74,6 +78,9 @@ jobs:
             global-cli|has-node-24|pinned-version|latest-canary)
               node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));delete p.devDependencies;fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
               ;;
+            local-cli-package)
+              node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));p.devDependencies={'@kirigami/cli':'latest'};fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
+              ;;
             preinstalled)
               npm install
               : > node_modules/.kiribuild-sentinel
@@ -88,7 +95,8 @@ jobs:
       - name: Run KiriBuild
         uses: ./.action
         with:
-          kirigami-version: ${{ (matrix.scenario == 'pinned-version' && '1.1.2') || (matrix.scenario == 'latest-canary' && 'latest') || env.KIRI_GOOD }}
+          # latest-canary leaves kirigami-version empty: the default @kirigami/cli fallback
+          kirigami-version: ${{ (matrix.scenario == 'pinned-version' && '1.1.2') || (matrix.scenario != 'latest-canary' && env.KIRI_GOOD) || '' }}
 
       - name: Assert the fixture was exported, with every core feature
         # pinned-version / latest-canary install a different CLI on purpose —
@@ -129,7 +137,7 @@ jobs:
           find dist -type f | sort
 
       - name: Assert the local CLI was used
-        if: matrix.scenario == 'local-cli' || matrix.scenario == 'preinstalled' || matrix.scenario == 'lockfile'
+        if: matrix.scenario == 'local-cli' || matrix.scenario == 'preinstalled' || matrix.scenario == 'lockfile' || matrix.scenario == 'local-cli-package'
         shell: bash
         run: test -x ./node_modules/.bin/kiri || { echo "::error::local kiri missing"; exit 1; }
 
@@ -155,6 +163,13 @@ jobs:
           command -v kiri >/dev/null || { echo "::error::global kiri not on PATH"; exit 1; }
           [ ! -e ./node_modules/.bin/kiri ] || { echo "::error::unexpected local kiri"; exit 1; }
 
+      - name: Assert the global CLI came from @kirigami/cli
+        if: matrix.scenario == 'latest-canary'
+        shell: bash
+        run: |
+          npm ls -g @kirigami/cli --depth=0 | grep -q '@kirigami/cli@' \
+            || { echo "::error::@kirigami/cli was not installed globally"; exit 1; }
+
       - name: Assert the pinned kirigami-version was installed and exported
         if: matrix.scenario == 'pinned-version'
         shell: bash
@@ -170,10 +185,10 @@ jobs:
         shell: bash
         run: |
           if [ ! -f dist/index.html ] || ! grep -q 'KiriBuild Fixture' dist/index.html; then
-            echo '::error::latest @kirigami/kirigami produced no usable export — still broken upstream'
+            echo '::error::latest @kirigami/cli produced no usable export — still broken upstream'
             exit 1
           fi
-          echo 'latest @kirigami/kirigami works — bump KIRI_GOOD in this workflow and unpin.'
+          echo 'latest @kirigami/cli works — bump KIRI_GOOD in this workflow and unpin.'
 
       - name: Assert the pre-installed Node was kept (setup-node skipped)
         if: matrix.scenario == 'has-node-24'

@@ -11,10 +11,14 @@ inputs:
     description: 'Node.js version to install if the runner does not already have Node 24+'
     required: false
     default: '24'
-  kirigami-version:
-    description: 'Version of @kirigami/kirigami to install when the project has no local copy'
+  cli-version:
+    description: 'Version of @kirigami/cli to install globally when the project has no local kiri'
     required: false
     default: 'latest'
+  kirigami-version:
+    description: 'Legacy: install this @kirigami/kirigami version globally instead of @kirigami/cli (only versions before 3.0.0 ship kiri)'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -56,12 +60,23 @@ runs:
 
     - name: Ensure the Kirigami CLI is available
       shell: bash
+      env:
+        CLI_VERSION: ${{ inputs.cli-version }}
+        KIRIGAMI_VERSION: ${{ inputs.kirigami-version }}
       run: |
         if [ -x "./node_modules/.bin/kiri" ]; then
-          echo "Using local @kirigami/kirigami from node_modules."
+          echo "Using the local kiri from node_modules."
         else
-          echo "No local Kirigami CLI found; installing @kirigami/kirigami@${{ inputs.kirigami-version }} globally."
-          npm install -g "@kirigami/kirigami@${{ inputs.kirigami-version }}"
+          if [ -n "$KIRIGAMI_VERSION" ]; then
+            pkg="@kirigami/kirigami@$KIRIGAMI_VERSION"
+          else
+            pkg="@kirigami/cli@$CLI_VERSION"
+            if [ -d node_modules/@kirigami/kirigami ]; then
+              echo "::warning::The project depends on @kirigami/kirigami but not on @kirigami/cli; the global kiri uses its own engine version. Add @kirigami/cli to devDependencies to pin it."
+            fi
+          fi
+          echo "No local kiri found; installing $pkg globally."
+          npm install -g "$pkg"
           echo "$(npm config get prefix)/bin" >> "$GITHUB_PATH"
         fi
 
@@ -73,5 +88,11 @@ runs:
         else
           KIRI_BIN="$(which kiri)"
         fi
-        echo "Running: $KIRI_BIN export"
-        node --experimental-wasm-jspi "$KIRI_BIN" export
+        # Node 24 needs the JSPI flag; newer Node ships JSPI enabled and rejects it.
+        if node --experimental-wasm-jspi -e 0 >/dev/null 2>&1; then
+          NODE_FLAGS="--experimental-wasm-jspi"
+        else
+          NODE_FLAGS=""
+        fi
+        echo "Running: node $NODE_FLAGS $KIRI_BIN export"
+        node $NODE_FLAGS "$KIRI_BIN" export
