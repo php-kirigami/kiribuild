@@ -129,10 +129,17 @@ rejects). 2.0.0 is also the last core release that ships `kiri` itself.
 that one line once `latest-canary` has been green for a while — or drop the
 pinning if upstream releases stabilise.
 
+Since core 3.0.0 moved `kiri` into `@kirigami/cli`, two more pins cover the
+current layout: `CLI_GOOD` (`@kirigami/cli`, currently `0.1.0`) and
+`CORE_GOOD` (`@kirigami/kirigami` 3.x, currently `3.0.0`). `KIRI_GOOD` stays
+the known-good version for the legacy layouts (`kirigami-version`, a project
+depending only on `@kirigami/kirigami`).
+
 - **`cli-resolution`** — a matrix over `test/fixtures/site`, a tiny project
   depending only on `@kirigami/kirigami`. Scenarios: `local-cli`, `local-cli-package`
-  (fixture depends on `@kirigami/cli@latest` instead; non-blocking until that
-  package is published — then make it blocking), `global-cli`,
+  (fixture depends on `@kirigami/cli@CLI_GOOD` instead), `global-cli`
+  (no dependency: the default fallback installs `@kirigami/cli`, pinned to
+  `CLI_GOOD` through `cli-version`),
   `preinstalled` (asserts `npm install` is skipped, via a sentinel file in
   `node_modules/`), `lockfile` (writes a `package-lock.json` via
   `npm install --package-lock-only` and no `node_modules/`, asserts the action
@@ -142,13 +149,14 @@ pinning if upstream releases stabilise.
   `pinned-version` (installs `kirigami-version: 1.1.2` — a non-latest value — and
   asserts that exact version lands and still exports), `latest-canary`
   (`continue-on-error`, non-blocking — leaves `kirigami-version` empty, so the
-  default `@kirigami/cli@latest` fallback runs; green ⇒ bump `KIRI_GOOD`).
-  `global-cli` and `has-node-24` pass `kirigami-version: KIRI_GOOD`, i.e. the
-  legacy path.
+  default `@kirigami/cli@latest` fallback runs; green ⇒ bump `CLI_GOOD`).
+  `has-node-24` passes `kirigami-version: KIRI_GOOD`, i.e. the legacy path.
   Every full scenario also asserts the core feature surface: layouts, `@stats`
   data file, `<markdown>`, a custom `<uppercase>` tag, a `post_render` hook, the
   image autogenerator (`dist/images/*.webp`), sitemap.
-- **`templates`** — a matrix over the official templates (pinned to `KIRI_GOOD`),
+- **`templates`** — a matrix over the official templates (pinned to
+  `CLI_GOOD` + `CORE_GOOD` when the template depends on `@kirigami/cli`, else
+  to `KIRI_GOOD`, so the job works before and after a template migrates),
   staged at the workspace root and run through the action. Both `template-default`
   (pages + `@kirigami/canva` Sass output + esbuild output + sitemap) and
   `template-demo` (all `features/*` pages, image autogenerator, `<swatches>` tag,
